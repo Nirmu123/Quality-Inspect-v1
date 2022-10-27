@@ -46,62 +46,15 @@ exports.getExecuteInspection = function(req, res) {
     chklstId = req.query.chklstId;
     chklstSeqNbr = req.query.chklstSeqNbr;
 
-    db.one(`SELECT cd.chklst_dtl_id FROM public.chklst_dtl cd WHERE cd.chklst_id = $1 and cd.chklst_seq_nbr = $2;`, [chklstId, chklstSeqNbr], e => e.chklst_dtl_id)
+    db.one(`SELECT cd.chklst_dtl_id FROM public.chklst_dtl cd WHERE cd.chklst_id = $1 and cd.chklst_seq_nbr = $2;`,[chklstId,chklstSeqNbr],e => e.chklst_dtl_id)
     .then((data) => {
         chklstDtlId = data;
-        db.oneOrNone(`SELECT td.task_dtl_id, td.status_code FROM public.task_dtl td WHERE td.chklst_dtl_id = $1;`, [data])
-        .then((data) => {
-            if(data === null) {
-                db.oneOrNone(`SELECT th.task_id FROM public.task_hdr th WHERE th.chklst_id = $1;`, [chklstId])
+        if(parseInt(chklstSeqNbr) === parseInt("0")) {
+            db.one(`INSERT INTO public.task_hdr(chklst_id, status_code, created_dttm, updated_dttm) VALUES($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING task_id;`, [chklstId,0])
+            .then((data) => {
+                taskId = data.task_id;
+                db.tx(insertTaskRecords)
                 .then((data) => {
-                    if(data === null) {
-                        db.one(`INSERT INTO public.task_hdr(chklst_id, status_code, created_dttm, updated_dttm) VALUES($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING task_id;`, [chklstId,0])
-                        .then((data) => {
-                            taskId = data.task_id;
-                            console.log("task_hdr.task_id- " + taskId);
-                            db.tx(insertTaskRecords)
-                            .then((data) => {
-                                db.task(getWorkInstructionDetails)
-                                .then((data) => {
-                                    res.locals.inspectionDetails = data;
-                                    res.locals.inspectionDetails[0]["task_dtl_id"] = taskDtlId;
-                                    console.log(res.locals.inspectionDetails[0]);
-                                    res.render("executeInspection",res.locals.inspectionDetails);
-                                }).catch(error => {
-                                    console.log(error);
-                                });
-                            }).catch(error => {
-                                console.log(error);
-                            });
-                        }).catch(error => {
-                            console.log(error);
-                        });
-                    }
-                    else {
-                        taskId = data.task_id;
-                        db.tx(insertTaskRecords)
-                        .then((data) => {
-                            db.task(getWorkInstructionDetails)
-                            .then((data) => {
-                                res.locals.inspectionDetails = data;
-                                res.locals.inspectionDetails[0]["task_dtl_id"] = taskDtlId;
-                                console.log(res.locals.inspectionDetails[0]);
-                                res.render("executeInspection",res.locals.inspectionDetails);
-                             }).catch(error => {
-                                res.send(error);
-                             })
-                        }).catch(error => {
-                            res.send(error);
-                        });
-                    }
-
-                }).catch(error => {
-                    res.send(error);
-                });
-            }
-            else {
-
-                if(data.status_code === '0') {
                     db.task(getWorkInstructionDetails)
                     .then((data) => {
                         res.locals.inspectionDetails = data;
@@ -109,27 +62,35 @@ exports.getExecuteInspection = function(req, res) {
                         console.log(res.locals.inspectionDetails[0]);
                         res.render("executeInspection",res.locals.inspectionDetails);
                     }).catch(error => {
-                        res.send(error);
-                    });
-                }
-                else {
-                    db.task(getWorkInstructionDetailsCompleted)
-                    .then((data) => {
-                        res.locals.inspectionDetails = data;
-                        console.log(res.locals.inspectionDetails[0]);
-                        res.render("executeInspectionCompleted",res.locals.inspectionDetails);
-                    }).catch(error => {
-                        res.send(error);
-                    });
-                }
-            }
-        }).catch(error => {
-            res.send(error);
-        });
+                        console.log(error);
+                    })
+                }).catch(error => {
+                    console.log(error);
+                })
+            }).catch(error => {
+                console.log(error);
+            });
+        }
+        else {
+            db.tx(insertTaskRecords)
+            .then((data) => {
+                db.task(getWorkInstructionDetails)
+                .then((data) => {
+                    res.locals.inspectionDetails = data;
+                    res.locals.inspectionDetails[0]["task_dtl_id"] = taskDtlId;
+                    console.log(res.locals.inspectionDetails[0]);
+                    res.render("executeInspection",res.locals.inspectionDetails);
+                }).catch(error => {
+                    console.log(error);
+                })
+            }).catch(error => {
+                console.log(error);
+            });
+        }
     }).catch(error => {
-        res.send(error);
-    });
-   
+        console.log(error);
+    })
+
 };
 
 exports.postExecuteInspection = function(req, res) {
@@ -142,24 +103,77 @@ exports.postExecuteInspection = function(req, res) {
     var postCommentValue = req.body.posthiddenCommentValue;
     var postJudgementValue = req.body.posthiddenJudgementButtonValue;
     console.log("Checklist ID- " + postChklstId + ", Checklist Seq Number- " + postChklstSeqNbr + ", Checklist Detail Id- " + postChklstDtlId + ", Input Field 1: " + postInputField1Value + ", Input Field 2: " + postInputField2Value + ", Comments: " + postCommentValue + ", Judgement- " + postJudgementValue + ", Task Dtl Id- " + postTaskDtlId);
+    
+    if(postInputField1Value != "default") {
+        updateTaskRecords("inputField1", postInputField1Value);
+    }
+    if(postInputField2Value != "default") {
+        updateTaskRecords("inputField2", postInputField2Value);
+    }
+    if(postCommentValue != "default") {
+        updateTaskRecords("comment", postCommentValue);
+    }
+    if(postJudgementValue != "default") {
+        updateTaskRecords("judgement", postJudgementValue);
+    }
 
+    db.none(`UPDATE public.task_dtl SET status_code = 90, updated_dttm = CURRENT_TIMESTAMP WHERE task_dtl_id = $1;`,[taskDtlId])
+    .then(() => {
+        console.log("Updated task_dtl, task_dtl_id: " + taskDtlId);
+    }).catch(error => {
+        console.log(error);
+    });
+    
     db.one(`SELECT MAX(chklst_seq_nbr) FROM public.chklst_dtl WHERE chklst_id = $1;`, [postChklstId])
     .then((data) => {
-        if(data.max < postChklstSeqNbr+1) {
+        if(parseInt(data.max) < (parseInt(postChklstSeqNbr)+1)) {
             console.log("data.max-" + data.max);
             console.log("postChklstSeqNbr-" + postChklstSeqNbr+1);
-            res.send("Inspection completed");
+            db.one(`SELECT COUNT(*) FROM public.task_dtl WHERE task_id IN 
+            (SELECT task_id from public.task_dtl WHERE task_dtl_id = $1) AND status_code < 90;`,[postTaskDtlId])
+            .then((data) => {
+                if(data.count === 0) {
+                    db.none(`UPDATE public.TASK_HDR set status_code = 90 WHERE task_id IN
+                    (SELECT task_id FROM public.task_dtl WHERE task_dtl_id = $1);`,[postTaskDtlId])
+                    .then(() => {
+                        res.send("Inspection Completed!!!!!")
+                    }).catch(error => {
+                        console.log(error);
+                    });
+                }
+            }).catch(error => {
+                console.log(error);
+            })
         }
         else {
-            chklstId = postChklstId;
-            chklstSeqNbr = postChklstSeqNbr+1;
+            chklstId = parseInt(postChklstId);
+            chklstSeqNbr = parseInt(postChklstSeqNbr)+1;
             const query = queryString.stringify({
                 "chklstId":chklstId,
                 "chklstSeqNbr":chklstSeqNbr
             });
             res.redirect("/operator/executeInspection/?" + query);
         }
-    })
+    }).catch(error => {
+        console.log(error);
+    });
+}
+
+function updateTaskRecords(componentName, componentValue) {
+
+    db.none(`UPDATE public.task_component_property SET property_value = $1 WHERE task_component_id =
+    (SELECT tccm.task_child_component_id FROM public.task_composite_component_mapping tccm 
+     INNER JOIN public.task_component tc ON tc.task_component_id = tccm.task_child_component_id AND tc.task_dtl_id = $2
+     INNER JOIN public.chklst_component cc ON cc.chklst_component_id = tc.chklst_component_id
+     INNER JOIN public.component co ON co.component_id = cc.base_component_id
+     INNER JOIN public.composite_component_mapping ccm ON ccm.child_component_id = co.component_id
+     AND ccm.composite_component_id IN (SELECT component_id from public.component where component_name = $3))
+     AND property_type = 'input';`, [componentValue, taskDtlId, componentName])
+    .then((data) => {
+        console.log("Updated task_component_property: Component Name: " + componentName + " Component Value: " + componentValue);
+    }).catch(error => {
+        console.log(error);
+    });
 }
 
 function insertTaskRecords(pgp) {
@@ -195,7 +209,7 @@ function getWorkInstructionDetails(pgp) {
     const v = q => pgp.any(`SELECT co.component_name, ccp.property_name, ccp.property_value, ccp.property_type
     FROM public.chklst_hdr ch
     INNER JOIN public.chklst_dtl cd 
-    ON ch.chklst_id = cd.chklst_id AND ch.chklst_id = $1 AND cd.chklst_seq_nbr = $2
+    ON ch.chklst_id = cd.chklst_id AND cd.chklst_id = $1 AND cd.chklst_seq_nbr = $2
     INNER JOIN public.chklst_component cc
     ON cd.chklst_dtl_id = cc.chklst_dtl_id
     INNER JOIN public.component co
