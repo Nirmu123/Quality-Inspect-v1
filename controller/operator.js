@@ -1,5 +1,6 @@
 var pgp = require("pg-promise")();
 const { publicDecrypt } = require("crypto");
+const path = require("path");
 var queryString = require("querystring");
 const db = pgp('postgresql://postgres:air2020@localhost:5432/rnaipl');
 var chklstId = null;
@@ -181,7 +182,7 @@ exports.postExecuteInspection = function(req, res) {
                         (SELECT task_id FROM public.task_dtl WHERE task_dtl_id = $1);`,[postTaskDtlId])
                         .then(() => {
                             console.log("Before redirecting");
-                            res.send("Inspection Completed!!!!!!!!!");
+                            res.sendFile(path.join(__dirname,"../views/inspectionComplete.html"));
                         }).catch(error => {
                             console.log(error);
                         })
