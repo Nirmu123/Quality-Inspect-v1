@@ -404,7 +404,7 @@ function getImage(pgp) {
         console.log(error);
     })
     //return imageBytes;
-}
+};
 
 function getWorkInstructionDetailsCompleted(pgp) {
 

@@ -5,6 +5,7 @@ const createError = require("http-errors");
 const PORT = 3000;
 
 const operatorRouter = require("./routes/operator");
+const adminRouter = require("./routes/admin");
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use("/static", express.static("static"));
 app.use("/script", express.static("script"));
 
 app.use("/operator", operatorRouter);
+app.use("/admin", adminRouter);
 
 app.use(function(req, res, next) {
     next(createError(404));
